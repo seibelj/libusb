@@ -46,6 +46,15 @@ LTLDFLAGS="${LTLDFLAGS} -no-undefined"
 
 AC_MSG_CHECKING([operating system])
 
+dnl force compilation for a chrome backend with emscripten. Will not build for chrome any other way
+AC_ARG_ENABLE([chrome_backend],
+	[AS_HELP_STRING([--enable-chrome-backend], [overwrite backend and build for chrome @<:@default=no@:>@])],
+	[chrome_backend=${enableval}], [chrome_backend=no])
+
+if test "x$chrome_backend" = "xyes"; then
+	host="CHROME"
+fi
+
 dnl on linux-android platform, some functions are in different places
 case $host in
 *-linux-android*)
@@ -92,6 +101,11 @@ case $host in
 *-haiku*)
 	AC_MSG_RESULT([Haiku])
 	backend="haiku"
+	threads="posix"
+	;;
+CHROME)
+	AC_MSG_RESULT([Chrome])
+	backend="chrome"
 	threads="posix"
 	;;
 *)
@@ -185,6 +199,12 @@ haiku)
 	AC_CHECK_HEADERS([poll.h])
 	AC_DEFINE([POLL_NFDS_TYPE],[nfds_t],[type of second poll() argument])
 	;;
+chrome)
+	AC_DEFINE(OS_CHROME, 1, [Chrome backend])
+	AC_SUBST(OS_CHROME)
+	THREAD_CFLAGS="-pthread"
+	LIBS="-pthread"
+	;;
 esac
 
 AC_SUBST(LIBS)
@@ -195,6 +215,7 @@ AM_CONDITIONAL(OS_OPENBSD, test "x$backend" = xopenbsd)
 AM_CONDITIONAL(OS_NETBSD, test "x$backend" = xnetbsd)
 AM_CONDITIONAL(OS_WINDOWS, test "x$backend" = xwindows)
 AM_CONDITIONAL(OS_HAIKU, test "x$backend" = xhaiku)
+AM_CONDITIONAL(OS_CHROME, test "x$backend" = xchrome)
 AM_CONDITIONAL(THREADS_POSIX, test "x$threads" = xposix)
 AM_CONDITIONAL(CREATE_IMPORT_LIB, test "x$create_import_lib" = "xyes")
 AM_CONDITIONAL(USE_UDEV, test "x$enable_udev" = xyes)

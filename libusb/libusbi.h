@@ -1126,6 +1126,7 @@ extern const struct usbi_os_backend windows_backend;
 extern const struct usbi_os_backend usbdk_backend;
 extern const struct usbi_os_backend wince_backend;
 extern const struct usbi_os_backend haiku_usb_raw_backend;
+extern const struct usbi_os_backend chrome_backend;
 
 extern struct list_head active_contexts_list;
 extern usbi_mutex_static_t active_contexts_lock;
