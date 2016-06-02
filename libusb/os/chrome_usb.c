@@ -3,36 +3,95 @@
 
 #include "libusbi.h"
 
-static int chrome_priv_add_device(struct libusb_context *ctx, char* js_device);
+// Populate information in an internal struct for easy reference later. Also
+// makes passing lots of data from JavaScript to C easier
+struct chrome_device_priv {
+    int session_id;
+    struct libusb_device_descriptor *ddesc;
+};
 
+static int chrome_priv_add_device(struct libusb_context *ctx, struct chrome_device_priv *dev_priv);
+static struct chrome_device_priv *chrome_alloc_device_priv();
+static int chrome_set_device_priv_value(struct chrome_device_priv *device_priv, int key, int intVal, char *strVal);
+
+static int chrome_set_device_priv_value(struct chrome_device_priv *device_priv, int key, int intVal, char *strVal) {
+    switch (key) {
+        case 0: // session_id
+            device_priv->session_id = intVal;
+            usbi_dbg("set device_priv session_id to %d", intVal);
+            break;
+        case 1: // vendor ID
+            (*(device_priv->ddesc))->idVendor = (uint16_t)intVal;
+            usbi_dbg("set device_priv->ddesc->idVendor to %d", intVal);
+            break;
+        case 2: // product ID
+            (*(device_priv->ddesc))->idProduct = (uint16_t)intVal;
+            usbi_dbg("set device_priv->ddesc->idProduct to %d", intVal);
+            break;
+        default:
+            usbi_dbg("unrecognized key [%d] to set a device_priv value", key);
+            return -1;
+    }
+    return 0;
+}
+
+static struct chrome_device_priv *chrome_alloc_device_priv() {
+    struct libusb_device_descriptor *ddesc = calloc(1, sizeof(*ddesc));
+    struct chrome_device_priv *dev_priv = calloc(1, sizeof(*dev_priv));
+
+    if (dev_priv == NULL || ddesc == NULL) {
+        usbi_err("chrome_priv_add_device: Unable to allocate memory");
+        return -1;
+    }
+
+    dev_priv->ddesc = ddesc;
+    return dev_priv;
+}
 
 static int chrome_init(struct libusb_context *ctx) {
     usbi_dbg("called chrome_init, getting current devices and registering callbacks");
 
     EM_ASM_({
-        var createDeviceString = function(device) {
-            return device.device + "||" + device.vendorId + "||" + device.productId +
-                "||" + device.productName + "||" + device.manufacturerName +
-                "||" + device.serialNumber;
+
+        // Get JS values into C struct
+        var allocDeviceAndSetValues = function(device) {
+            var devicePtr = Module.ccall('chrome_alloc_device_priv', // name of C function
+                'number', // return type
+                [], // argument types
+                []); // arguments
+            // session id
+            Module.ccall('chrome_set_device_priv_value',
+                'number',
+                ['number', 'number', 'number', 'string'],
+                [devicePtr, 0, device.device, null]);
+            // vendor id
+            Module.ccall('chrome_set_device_priv_value',
+                'number',
+                ['number', 'number', 'number', 'string'],
+                [devicePtr, 1, device.vendorId, null]);
+            // product id
+            Module.ccall('chrome_set_device_priv_value',
+                'number',
+                ['number', 'number', 'number', 'string'],
+                [devicePtr, 2, device.productId, null]);
+
+            return devicePtr;
         };
 
         chrome.usb.getDevices({}, function(devices) {
             var len = devices.length;
             for (var i = 0; i < len; i++) {
-                var str = createDeviceString(device);
-                var buffer = Module._malloc(str.length+1);
-                Module.writeStringToMemory(str, buffer);
+
+                var devicePtr = allocDeviceAndSetValues(devices[i]);
+                
                 var result = Module.ccall('chrome_priv_add_device', // name of C function
                     'number', // return type
                     ['number', 'number'], // argument types
-                    [ctx, buffer]); // arguments
+                    [ctx, devicePtr]); // arguments
                 }
         });
 
         var cb = function(device) {
-            var str = createDeviceString(device);
-            var buffer = Module._malloc(str.length+1);
-            Module.writeStringToMemory(str, buffer);
             var result = Module.ccall('chrome_priv_add_device', // name of C function
                 'number', // return type
                 ['number', 'number'], // argument types
@@ -46,20 +105,20 @@ static void chrome_exit() {
     usbi_dbg("called chrome_exit");
 }
 
-static int chrome_priv_add_device(struct libusb_context *ctx, char* js_device) {
-     /* get the first token */
-    char *token, *saveptr;
-    token = strtok_r(js_device, "||", &saveptr);
-   
-    /* walk through other tokens */
-    while( token != NULL ) 
-    {
-      printf( " %s\n", token );
+static int chrome_priv_add_device(struct libusb_context *ctx, struct chrome_device_priv *dev_priv) {
 
-      token = strtok_r(NULL, "||", &saveptr);
+    struct libusb_device *dev = NULL;
+    dev = usbi_get_device_by_session_id(ctx, dev_priv->session_id);
+
+    if (dev == NULL) {
+        dev = usbi_alloc_device(ctx, dev_priv->session_id);
+
+        // inaccessible via chrome
+        dev->port_number = 0;
+        dev->bus_number = 0;
+        dev->device_address = 0;
+        dev->parent_dev = NULL;
     }
-
-    free(js_device);
 
     return 0;
 }
@@ -105,7 +164,7 @@ const struct usbi_os_backend chrome_backend = {
 
         .clock_gettime = darwin_clock_gettime,
 
-        .device_priv_size = sizeof(struct darwin_device_priv),
+        .device_priv_size = sizeof(struct chrome_device_priv),
         .device_handle_priv_size = sizeof(struct darwin_device_handle_priv),
         .transfer_priv_size = sizeof(struct darwin_transfer_priv),
 };
