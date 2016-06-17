@@ -203,7 +203,9 @@ chrome)
 	AC_DEFINE(OS_CHROME, 1, [Chrome backend])
 	AC_SUBST(OS_CHROME)
 	THREAD_CFLAGS="-pthread"
-	LIBS="-pthread"
+	LIBS="${LIBS} -pthread"
+	AC_CHECK_HEADERS([poll.h])
+	AC_DEFINE([POLL_NFDS_TYPE],[nfds_t],[type of second poll() argument])
 	;;
 esac
 

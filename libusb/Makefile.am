@@ -19,13 +19,14 @@ WINDOWS_USBDK_SRC = os/windows_usbdk.h os/windows_usbdk.c
 WINCE_USB_SRC = os/wince_usb.h os/wince_usb.c
 HAIKU_USB_SRC = os/haiku_usb.h os/haiku_usb_backend.cpp \
 		os/haiku_usb_raw.h os/haiku_usb_raw.cpp os/haiku_pollfs.cpp
+CHROME_USB_SRC = os/chrome_usb.c
 
 EXTRA_DIST = $(POSIX_POLL_SRC) $(POSIX_THREADS_SRC) \
 	$(WINDOWS_POLL_SRC) $(WINDOWS_THREADS_SRC) \
 	$(LINUX_USBFS_SRC) $(DARWIN_USB_SRC) \
 	$(OPENBSD_USB_SRC) $(NETBSD_USB_SRC) \
 	$(WINDOWS_COMMON_SRC) $(WINDOWS_USB_SRC) $(WINDOWS_USBDK_SRC) \
-        $(WINCE_USB_SRC) $(HAIKU_USB_SRC) \
+        $(WINCE_USB_SRC) $(HAIKU_USB_SRC) $(CHROME_USB_SRC) \
 	os/linux_udev.c os/linux_netlink.c
 
 if OS_LINUX
@@ -55,6 +56,13 @@ if OS_HAIKU
 noinst_LTLIBRARIES = libusb_haiku.la
 libusb_haiku_la_SOURCES = $(HAIKU_USB_SRC)
 libusb_1_0_la_LIBADD = libusb_haiku.la
+endif
+
+if OS_CHROME
+OS_SRC = $(CHROME_USB_SRC)
+#EMSCRIPTEN_FLAGS = -s USE_PTHREADS=1
+#else
+EMSCRIPTEN_FLAGS =
 endif
 
 if OS_WINDOWS
@@ -89,7 +97,7 @@ else
 THREADS_SRC = $(WINDOWS_THREADS_SRC)
 endif
 
-libusb_1_0_la_CFLAGS = $(AM_CFLAGS)
+libusb_1_0_la_CFLAGS = $(EMSCRIPTEN_FLAGS) $(AM_CFLAGS)
 libusb_1_0_la_LDFLAGS = $(LTLDFLAGS)
 libusb_1_0_la_SOURCES = libusbi.h libusb.h version.h version_nano.h \
 	core.c descriptor.c hotplug.h hotplug.c io.c strerror.c sync.c \
